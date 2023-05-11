@@ -3,9 +3,16 @@ import pandas as pd
 import plotly.graph_objs as go
 import plotly.express as px
 import numpy as np
+from sklearn.tree import DecisionTreeClassifier
 
 # Load the data
 data = pd.read_csv('transfusion.data')
+X = data.iloc[:, :-1]
+y = data.iloc[:, -1]
+
+# Train a decision tree classifier
+tree = DecisionTreeClassifier(random_state=42)
+tree.fit(X, y)
 
 # rename the columns
 data = data.rename(columns={'Recency (months)': 'Recency',
@@ -17,62 +24,68 @@ data = data.rename(columns={'Recency (months)': 'Recency',
 # Create the Tkinter window
 window = tk.Tk()
 window.title('Blood Donation Predictor')
-window.geometry('600x600')
+window.geometry('800x800')
+window.configure(bg="white")
 
 # Define the input fields
-recency_label = tk.Label(window, text='Recency (Months)')
+recency_label = tk.Label(window, text='Enter the number of months since the last donation:')
 recency_label.pack()
 recency_entry = tk.Entry(window)
 recency_entry.pack()
 
-frequency_label = tk.Label(window, text='Frequency of Donations')
+frequency_label = tk.Label(window, text='Enter the number of times the donor has donated blood:')
 frequency_label.pack()
 frequency_entry = tk.Entry(window)
 frequency_entry.pack()
 
-monetary_label = tk.Label(window, text='Monetary')
+monetary_label = tk.Label(window, text='Enter the total amount of blood donated in cubic centimeters:')
 monetary_label.pack()
 monetary_entry = tk.Entry(window)
 monetary_entry.pack()
 
-time_label = tk.Label(window, text='Time')
+time_label = tk.Label(window, text='Enter the number of months since the donors first donation')
 time_label.pack()
 time_entry = tk.Entry(window)
 time_entry.pack()
 
-donated_label = tk.Label(window, text='whether he/she donated blood in March 2007')
+donated_label = tk.Label(window, text='Enter 1 if the donor has donated blood in March 2007, 0 if not')
 donated_label.pack()
 donated_entry = tk.Entry(window)
 donated_entry.pack()
 
-# Define the error message
-error_message = tk.Label(window, text='Please enter valid inputs', fg='red')
-
-# Define the predict function
+# Define the modified predict function
 def predict():
-    # Get the user inputs
-    recency = recency_entry.get()
-    frequency = frequency_entry.get()
-    monetary = monetary_entry.get()
-    time = time_entry.get()
-    donated = donated_entry.get()
+    try:
+        # Get the user inputs
+        recency = recency_entry.get()
+        frequency = frequency_entry.get()
+        monetary = monetary_entry.get()
+        time = time_entry.get()
 
-    # Check if inputs are valid
-    if not recency.isdigit() or not frequency.isdigit() or not monetary.isdigit() or not time.isdigit() or not donated.isdigit():
+        # Check if inputs are valid
+        if not all(x.isnumeric() for x in [recency, frequency, monetary, time]):
+            error_message.pack()
+            return
+        if float(recency) < 0 or float(frequency) < 0 or float(monetary) < 0 or float(time) < 0:
+            error_message.pack()
+            return
+
+        # Make the prediction
+        prediction = tree.predict([[recency, frequency, monetary, time]])
+
+        # Show the prediction
+        if prediction == 1:
+            prediction_label.config(text='The person is likely to donate blood again.')
+        else:
+            prediction_label.config(text='The person is unlikely to donate blood again.')
+    except:
         error_message.pack()
-        return
-
-    # Make the prediction
-    prediction = model.predict(np.array([[int(recency), int(frequency), int(monetary), int(time), int(donated)]]))[0]
-
-    # Show the prediction
-    prediction_label.config(text='Likelihood of Donating Blood: {}%'.format(round(prediction * 100, 2)))
 
 # Define the predict button
-predict_button = tk.Button(window, text='Predict', command=predict)
-predict_button.pack()
+predict_button = tk.Button(window, text='Predict', command=predict, bg='red', fg='white', font=('helvetica', 9, 'bold'))
+predict_button.pack(pady=10)
 
-# Define the visualizations button
+# Define the visualizations function and display in window
 def show_visualizations():
     # Calculate the mean and standard deviation of the amount donated by each person in cc
     donation_stats = data.groupby('Donated_Mar_2007')['Monetary'].agg(['mean', 'std']).reset_index()
@@ -83,14 +96,18 @@ def show_visualizations():
     fig2.update_layout(title='Mean Amount Donated by Each Person (cc)',
                        xaxis_title='Donated',
                        yaxis_title='Mean Amount Donated (cc)')
-    fig2.show(renderer='browser', auto_open=False)
+    fig2_data = fig2.to_html(full_html=False, default_height=500, default_width=700)
+    fig2_div = tk.Label(window, text=fig2_data, bg='white')
+    fig2_div.pack(pady=10)
 
     # Create the scatter chart of total number of donations
     fig3 = px.scatter(data, x='Monetary', y='Frequency', color='Donated_Mar_2007')
     fig3.update_layout(title='Total Number of Donations vs. Frequency of Donations',
                        xaxis_title='Total Number of Donations (cc)',
                        yaxis_title='Frequency of Donations (times)')
-    fig3.show(renderer='browser', auto_open=False)
+    fig3_data = fig3.to_html(full_html=False, default_height=500, default_width=700)
+    fig3_div = tk.Label(window, text=fig3_data, bg='white')
+    fig3_div.pack(pady=10)
 
     # Create the chart of the highest donation in cc for blood
     fig4 = px.histogram(data, x='Monetary', color='Donated_Mar_2007', nbins=25, range_x=(0, 1500))
@@ -98,7 +115,9 @@ def show_visualizations():
                        xaxis_title='Amount Donated (cc)',
                        yaxis_title='Count')
     fig4.update_traces(opacity=0.75)
-    fig4.show(renderer='browser', auto_open=False)
+    fig4_data = fig4.to_html(full_html=False, default_height=500, default_width=700)
+    fig4_div = tk.Label(window, text=fig4_data, bg='white')
+    fig4_div.pack(pady=10)
 
     # Create the chart of the standard deviation of recency (months)
     fig5 = px.histogram(data, x='Recency', color='Donated_Mar_2007', nbins=25, range_x=(0, 50))
@@ -106,15 +125,22 @@ def show_visualizations():
                        xaxis_title='Recency (months)',
                        yaxis_title='Count')
     fig5.update_traces(opacity=0.75)
-    fig5.show(renderer='browser', auto_open=False)
+    fig5_data = fig5.to_html(full_html=False, default_height=500, default_width=700)
+    fig5_div = tk.Label(window, text=fig5_data, bg='white')
+    fig5_div.pack(pady=10)
 
 # Define the visualizations button
-visualizations_button = tk.Button(window, text='Show Visualizations', command=show_visualizations)
-visualizations_button.pack()
+visualizations_button = tk.Button(window, text='Show Visualizations', command=show_visualizations, bg='red', fg='white', font=('helvetica', 9, 'bold'))
+visualizations_button.pack(pady=10)
 
 # Define the prediction label
-prediction_label = tk.Label(window, text='Likelihood of Donating Blood: ')
-prediction_label.pack()
+prediction_label = tk.Label(window, text='Likelihood of Donating Blood: ', bg='white')
+prediction_label.pack(pady=10)
+
+# Define the error message
+error_message = tk.Label(window, text='Please enter valid inputs (numerical values only)', fg='red', bg='white', font=('helvetica', 10, 'bold'))
+instructions_label = tk.Label(window, text='Example input: 2, 50, 12500, 98, 1', bg='white')
+instructions_label.pack()
 
 # Run the Tkinter event loop
 window.mainloop()
